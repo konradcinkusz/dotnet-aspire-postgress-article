@@ -1,0 +1,53 @@
+name: Build & Release PDF
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PlantUML
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y plantuml graphviz
+
+      - name: Compile PlantUML diagrams
+        run: |
+          find figures -name "*.plantuml" -print0 | \
+            xargs -0 -I {} plantuml -tpng {}
+
+      - name: Verify generated figures
+        run: ls -la figures
+
+      - uses: xu-cheng/latex-action@v4
+        with:
+          root_file: main.tex
+          latexmk_use_xelatex: true
+
+      - name: Rename PDF
+        run: mv main.pdf Aspire_PostgreSQL_Setup.pdf
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Aspire_PostgreSQL_Setup
+          path: Aspire_PostgreSQL_Setup.pdf
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Aspire_PostgreSQL_Setup
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: Aspire_PostgreSQL_Setup.pdf

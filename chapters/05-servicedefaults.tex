@@ -1,0 +1,138 @@
+\section{The ServiceDefaults Shared Library}
+\label{sec:servicedefaults}
+
+\subsection{Purpose and Project Structure}
+
+The ServiceDefaults library is a class library that is referenced by every project the AppHost orchestrates. Its purpose is to centralise three cross-cutting concerns so that they do not need to be independently configured in each orchestrated project:
+
+\begin{enumerate}
+  \item \textbf{OpenTelemetry} --- structured logs, distributed traces, and metrics exported via OTLP to the Aspire dashboard.
+  \item \textbf{HTTP resilience} --- default retry and circuit-breaker policies on outbound \texttt{HttpClient} instances via \texttt{Microsoft.Extensions.Http.Resilience}.
+  \item \textbf{Service discovery} --- resolution of service names to endpoints via \texttt{Microsoft.Extensions.ServiceDiscovery}, enabling inter-service calls by name rather than hard-coded URLs.
+\end{enumerate}
+
+The \texttt{.csproj} for the HobbitGame ServiceDefaults project is:
+
+\begin{lstlisting}[language=XML]
+<!-- src/HobbitGame.ServiceDefaults/HobbitGame.ServiceDefaults.csproj -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAspireSharedProject>true</IsAspireSharedProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience"    Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.ServiceDiscovery"   Version="9.0.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.10.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting"        Version="1.10.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.10.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http"       Version="1.10.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime"    Version="1.10.0" />
+  </ItemGroup>
+</Project>
+\end{lstlisting}
+
+\subsection{Extensions.cs}
+
+The library exposes two extension methods on \texttt{IHostApplicationBuilder}: \texttt{AddServiceDefaults}, called once per orchestrated project, and \texttt{MapDefaultEndpoints}, called once the application is built to register health-check routes:
+
+\begin{lstlisting}[language={[Sharp]C}]
+// src/HobbitGame.ServiceDefaults/Extensions.cs
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+
+namespace Microsoft.Extensions.Hosting;
+
+public static class Extensions
+{
+    public static IHostApplicationBuilder AddServiceDefaults(
+        this IHostApplicationBuilder builder)
+    {
+        builder.ConfigureOpenTelemetry();
+        builder.AddDefaultHealthChecks();
+        builder.Services.AddServiceDiscovery();
+        builder.Services.ConfigureHttpClientDefaults(http =>
+        {
+            http.AddStandardResilienceHandler();
+            http.AddServiceDiscovery();
+        });
+        return builder;
+    }
+
+    public static IHostApplicationBuilder ConfigureOpenTelemetry(
+        this IHostApplicationBuilder builder)
+    {
+        builder.Logging.AddOpenTelemetry(logging =>
+        {
+            logging.IncludeFormattedMessage = true;
+            logging.IncludeScopes = true;
+        });
+
+        builder.Services.AddOpenTelemetry()
+            .WithMetrics(metrics =>
+            {
+                metrics
+                    .AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddRuntimeInstrumentation();
+            })
+            .WithTracing(tracing =>
+            {
+                tracing
+                    .AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation();
+            });
+
+        builder.AddOpenTelemetryExporters();
+        return builder;
+    }
+
+    private static IHostApplicationBuilder AddOpenTelemetryExporters(
+        this IHostApplicationBuilder builder)
+    {
+        var useOtlpExporter =
+            !string.IsNullOrWhiteSpace(
+                builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+
+        if (useOtlpExporter)
+        {
+            builder.Services.AddOpenTelemetry().UseOtlpExporter();
+        }
+        return builder;
+    }
+
+    public static IHostApplicationBuilder AddDefaultHealthChecks(
+        this IHostApplicationBuilder builder)
+    {
+        builder.Services.AddHealthChecks()
+            .AddCheck("self", () => HealthCheckResult.Healthy(),
+                      ["live"]);
+        return builder;
+    }
+
+    public static WebApplication MapDefaultEndpoints(this WebApplication app)
+    {
+        app.MapHealthChecks("/health");
+        app.MapHealthChecks("/alive", new HealthCheckOptions
+        {
+            Predicate = r => r.Tags.Contains("live")
+        });
+        return app;
+    }
+}
+\end{lstlisting}
+
+\subsection{What the Dashboard Receives}
+
+When the AppHost is running, it starts an OTLP collector endpoint and injects \texttt{OTEL\_EXPORTER\_OTLP\_ENDPOINT} into every orchestrated project's environment. The \texttt{AddOpenTelemetryExporters} method detects this variable and activates the OTLP exporter. Logs, traces, and metrics from every orchestrated project therefore flow automatically into the Aspire dashboard without any manual configuration in the individual projects.
+
+The \texttt{/health} and \texttt{/alive} endpoints registered by \texttt{MapDefaultEndpoints} are used by Aspire's health-check polling to determine when a resource is ready. This is the mechanism that enables \texttt{WaitFor} to function correctly for project resources (as opposed to container resources, which use TCP probing).

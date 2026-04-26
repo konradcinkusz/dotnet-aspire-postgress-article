@@ -1,0 +1,70 @@
+\section{Integrating the Web Project}
+\label{sec:web}
+
+\subsection{NuGet Package Changes}
+
+Two additions are required in the web project's \texttt{.csproj}: a reference to \texttt{Aspire.Npgsql.EntityFrameworkCore.PostgreSQL} and a project reference to the ServiceDefaults library:
+
+\begin{lstlisting}[language=XML]
+<!-- src/HobbitGame.Web/HobbitGame.Web.csproj (additions only) -->
+<ItemGroup>
+  <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL"
+                    Version="9.0.0" />
+</ItemGroup>
+
+<ItemGroup>
+  <ProjectReference Include="..\HobbitGame.ServiceDefaults\
+HobbitGame.ServiceDefaults.csproj" />
+</ItemGroup>
+\end{lstlisting}
+
+\texttt{Aspire.Npgsql.EntityFrameworkCore.PostgreSQL} is a thin integration package that wraps \texttt{Npgsql.EntityFrameworkCore.PostgreSQL} and adds Aspire-aware configuration reading. Specifically, its \texttt{AddNpgsqlDbContext\textless TContext\textgreater} extension method reads the connection string from the .NET configuration system under the key \texttt{ConnectionStrings\_\_\{name\}}, which is exactly the key that Aspire injects via \texttt{WithReference}. The developer does not write a connection string anywhere; Aspire provides it at runtime.
+
+\subsection{Program.cs Changes}
+
+Two additions are required in the web project's \texttt{Program.cs}. Both must appear before \texttt{builder.Build()}:
+
+\begin{lstlisting}[language={[Sharp]C}]
+// src/HobbitGame.Web/Program.cs (additions only; existing lines unchanged)
+var builder = WebApplication.CreateBuilder(args);
+
+// --- Aspire additions ---
+builder.AddServiceDefaults();                             // (1)
+builder.AddNpgsqlDbContext<AppDbContext>("hobbitdb");      // (2)
+// --- end Aspire additions ---
+
+// ... existing DI registrations, middleware, etc. ...
+
+var app = builder.Build();
+
+// --- Aspire addition ---
+app.MapDefaultEndpoints();                                // (3)
+// --- end Aspire addition ---
+
+// ... existing middleware pipeline, app.Run() ...
+\end{lstlisting}
+
+Three annotations:
+
+\textbf{(1) \texttt{AddServiceDefaults()}.} Registers OpenTelemetry, HTTP resilience, and service discovery. Must be called before any \texttt{AddHttpClient} calls so that the resilience and service-discovery handlers are applied globally.
+
+\textbf{(2) \texttt{AddNpgsqlDbContext\textless AppDbContext\textgreater("hobbitdb")}.} Registers \texttt{AppDbContext} in the DI container, reads the connection string from \texttt{ConnectionStrings\_\_hobbitdb}, and enables Aspire health checks and telemetry for the database connection. The string \texttt{"hobbitdb"} must match the argument passed to \texttt{AddDatabase} in the AppHost. No \texttt{appsettings.json} entry is needed.
+
+\textbf{(3) \texttt{MapDefaultEndpoints()}.} Registers \texttt{/health} and \texttt{/alive} endpoints. This call must appear after \texttt{builder.Build()} and before \texttt{app.Run()}.
+
+\subsection{Avoiding Conflicts with Existing DbContext Registrations}
+
+If the web project already registers \texttt{AppDbContext} via \texttt{AddDbContext} (for example, with a connection string read from \texttt{appsettings.json}), that registration must be removed before adding the Aspire version. Registering the same context twice produces a runtime \texttt{InvalidOperationException}. The Aspire-aware registration supersedes the manual one and does not require any compensating configuration entry in \texttt{appsettings.json}.
+
+\subsection{Database Initialisation at Startup}
+
+For the HobbitGame POC, schema creation uses \texttt{EnsureCreatedAsync}, which creates tables if they do not exist and is a no-op if they do. This is the appropriate choice for local development without a formal migration history. For production or migration-tracked environments, \texttt{MigrateAsync} should be used instead~\cite{efcoredocs2024}:
+
+\begin{lstlisting}[language={[Sharp]C}]
+// Inside app.Services.CreateScope() at startup
+await dbContext.Database.EnsureCreatedAsync(); // POC / development
+// OR
+await dbContext.Database.MigrateAsync();       // production / staged migrations
+\end{lstlisting}
+
+Both calls are safe to make under \texttt{WaitFor} ordering because Aspire guarantees the Postgres container is accepting connections before the web project process starts.

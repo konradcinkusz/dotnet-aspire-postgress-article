@@ -1,0 +1,30 @@
+\section{Background: .NET Aspire Primitives}
+\label{sec:background}
+
+\subsection{The DistributedApplication Model}
+
+.NET Aspire introduces a \texttt{DistributedApplication} abstraction whose sole responsibility is declaring \textit{resources} --- projects, containers, databases, message buses --- and the \textit{relationships} between them. At runtime the AppHost process orchestrates the lifecycle of every declared resource: it pulls container images, creates Docker volumes, injects environment variables and connection strings into dependent processes, and surfaces a unified health-and-telemetry dashboard~\cite{aspiredocs2024}.
+
+The model separates three concerns that are conflated in traditional \texttt{docker-compose.yml} files: (i) \textit{infrastructure topology} (what exists and what depends on what), (ii) \textit{configuration injection} (how connection strings reach application code), and (iii) \textit{observability routing} (where logs, metrics, and traces are collected). Aspire handles all three through typed C\# builder calls rather than YAML, making the setup amenable to refactoring, code review, and static analysis.
+
+\subsection{Resource Types Relevant to PostgreSQL Setups}
+
+Three resource types are relevant to the PostgreSQL + pgAdmin scenario described in this article:
+
+\begin{itemize}
+  \item \textbf{Container resources} --- wrapping a Docker image. \texttt{AddPostgres} and \texttt{WithPgAdmin} both produce container resources. Aspire manages their start order, port allocation, and environment variables automatically.
+  \item \textbf{Database resources} --- logical databases registered inside a container resource via \texttt{AddDatabase}. A database resource carries the connection string that will be injected into dependent projects.
+  \item \textbf{Project resources} --- references to other \texttt{.csproj} files in the solution, declared via \texttt{AddProject\textless T\textgreater}. Aspire compiles and launches these projects as child processes, injecting the connection strings of any referenced database resources as \texttt{ConnectionStrings\_\_\{name\}} environment variables.
+\end{itemize}
+
+\subsection{Container Lifetime Options}
+
+By default, Aspire tears down container resources when the AppHost process exits. For development scenarios where database state must survive restarts --- such as a game save file stored in PostgreSQL --- this default is undesirable. \texttt{ContainerLifetime.Persistent} instructs Aspire to leave the container running after the AppHost exits and to reuse it on the next invocation~\cite{aspiredocs2024}. The container is identified by the resource name; a name collision with an existing container will reuse rather than recreate it. Named Docker volumes behave analogously: \texttt{WithDataVolume()} creates or reuses a named volume, so rows written in one session are available in the next.
+
+\subsection{Readiness Ordering with WaitFor}
+
+PostgreSQL containers require a few seconds to initialise. If the web application starts before the database is ready, connection attempts fail and --- in the absence of retry logic --- the application either crashes or enters a degraded state. Aspire's \texttt{WaitFor} call on the project resource instructs the AppHost to delay process launch until the referenced resource has passed its health check. For Postgres, the health check queries the server's readiness endpoint; the web app process does not start until that check passes~\cite{aspiredocs2024}.
+
+\subsection{ServiceDefaults and OpenTelemetry}
+
+The ServiceDefaults library is a class library project (tagged \texttt{IsAspireSharedProject}) that centralises three cross-cutting concerns: OpenTelemetry export (traces, metrics, and logs via OTLP to the Aspire dashboard), HTTP client resilience defaults (\texttt{Microsoft.Extensions.Http.Resilience}), and service discovery (\texttt{Microsoft.Extensions.ServiceDiscovery}). Every orchestrated project calls \texttt{builder.AddServiceDefaults()} early in its \texttt{Program.cs}, giving the Aspire dashboard visibility into the full distributed trace~\cite{aspiredocs2024,otelspec2023}.

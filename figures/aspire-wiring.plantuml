@@ -1,0 +1,60 @@
+@startuml
+
+' ============================================================
+' Figure 1. .NET Aspire resource wiring diagram
+' AppHost → Postgres + pgAdmin + Web project
+' ============================================================
+
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 11
+skinparam ArrowColor #333333
+skinparam ArrowFontSize 10
+
+skinparam rectangle {
+    BackgroundColor #F7F7F5
+    BorderColor #333333
+    FontColor #222222
+}
+
+skinparam component {
+    BackgroundColor #FAF8F4
+    BorderColor #777777
+    FontColor #555555
+}
+
+skinparam note {
+    BackgroundColor #FFF9E6
+    BorderColor #B8A356
+    FontColor #333333
+    FontSize 10
+}
+
+title **Figure 1.** .NET Aspire AppHost resource wiring
+
+rectangle "**Aspire AppHost**\n(HobbitGame.AppHost)" as AppHost {
+
+  component "postgres\n(Docker container)\n+ named volume" as Postgres
+  component "pgadmin\n(Docker container)" as PgAdmin
+  component "hobbitdb\n(logical database)" as HobbitDb
+  component "webapp\n(HobbitGame.Web)" as WebApp
+
+  Postgres --> HobbitDb : AddDatabase("hobbitdb")
+  Postgres --> PgAdmin  : WithPgAdmin() auto-configures server
+  HobbitDb --> WebApp   : WithReference(hobbitDb)\nConnectionStrings__hobbitdb injected
+  WebApp   ..> HobbitDb : WaitFor(hobbitDb)\ndelays startup until Postgres ready
+}
+
+note right of Postgres
+  .WithDataVolume()
+  .WithLifetime(Persistent)
+  Survives dotnet run restart
+end note
+
+note right of WebApp
+  .WithExternalHttpEndpoints()
+  HTTP/HTTPS on localhost
+end note
+
+@enduml

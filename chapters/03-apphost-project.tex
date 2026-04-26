@@ -1,0 +1,59 @@
+\section{Creating the AppHost Project}
+\label{sec:apphost}
+
+\subsection{Project Structure and the Secondary SDK}
+
+The AppHost project is a conventional \texttt{.exe} project with one unusual property: it carries a \textit{secondary SDK} declaration that injects the Aspire build tooling. The secondary SDK line must appear immediately after the opening \texttt{<Project>} tag and before the \texttt{<PropertyGroup>}:
+
+\begin{lstlisting}[language=XML]
+<!-- src/HobbitGame.AppHost/HobbitGame.AppHost.csproj -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <Sdk Name="Aspire.AppHost.Sdk" Version="9.0.0" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAspireHost>true</IsAspireHost>
+    <UserSecretsId>hobbit-apphost-secrets</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost"    Version="9.0.0" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HobbitGame.Web\HobbitGame.Web.csproj" />
+  </ItemGroup>
+</Project>
+\end{lstlisting}
+
+Four properties in this file merit explicit comment.
+
+\textbf{\texttt{Aspire.AppHost.Sdk}.} This is not the primary SDK (\texttt{Microsoft.NET.Sdk}); it is a secondary SDK that augments the build with Aspire-specific MSBuild targets. Without it, the \texttt{IsAspireHost} flag and the \texttt{Projects.*} type generation described in Section~\ref{sec:wiring} will not function.
+
+\textbf{\texttt{IsAspireHost}.} Marks the project as the Aspire orchestrator. This flag enables the code-generation step that produces the \texttt{Projects.HobbitGame\_Web} type reference used in \texttt{Program.cs}.
+
+\textbf{\texttt{UserSecretsId}.} This identifier links the project to a .NET User Secrets store. Aspire generates PostgreSQL credentials on first run and writes them to this store. Without a \texttt{UserSecretsId}, credential storage fails silently and the password is lost between sessions~\cite{microsoftusersecrets2024}.
+
+\textbf{\texttt{Aspire.Hosting.PostgreSQL}.} This NuGet package adds the \texttt{AddPostgres}, \texttt{WithPgAdmin}, and \texttt{AddDatabase} extension methods to the builder. Without it, those calls do not exist.
+
+\subsection{Project Reference Requirement}
+
+The AppHost must carry a \texttt{ProjectReference} to every project it orchestrates. This requirement exists at two levels: (i) the build system must be able to compile the referenced project so that its output assembly is available for the AppHost to launch; (ii) the Aspire SDK code-generation step must be able to emit the \texttt{Projects.*} type that is used in the \texttt{AddProject\textless T\textgreater} call. A missing reference produces a build error of the form \texttt{CS0246: The type or namespace name `Projects' could not be found}.
+
+\subsection{Adding the Project to the Solution}
+
+After creating the \texttt{.csproj} file, the project must be registered in the solution file. The conventional command is:
+
+\begin{lstlisting}
+dotnet sln HobbitGame.sln add src/HobbitGame.AppHost/HobbitGame.AppHost.csproj
+\end{lstlisting}
+
+The same command applies to the ServiceDefaults project described in Section~\ref{sec:servicedefaults}. Visual Studio and Rider will both correctly resolve the secondary SDK and recognise the project as an Aspire orchestrator after the solution is reloaded.
+
+\subsection{Setting the Startup Project}
+
+Once the AppHost project is in the solution, it should be set as the startup project. In Visual Studio this is done by right-clicking the project in Solution Explorer and selecting \textit{Set as Startup Project}. In Rider, the run configuration dropdown should point at \texttt{HobbitGame.AppHost}. Running any other project directly will start only that process in isolation, without Aspire orchestration, and the database connection string will not be injected.

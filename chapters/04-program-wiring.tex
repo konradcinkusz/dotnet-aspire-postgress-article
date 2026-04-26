@@ -1,0 +1,74 @@
+\section{Resource Wiring in Program.cs}
+\label{sec:wiring}
+
+\subsection{Canonical Structure}
+
+The AppHost \texttt{Program.cs} consists of three logical blocks: (i) builder creation, (ii) resource declarations, and (iii) build-and-run. The complete canonical file for the HobbitGame scenario is:
+
+\begin{lstlisting}[language={[Sharp]C}]
+// src/HobbitGame.AppHost/Program.cs
+var builder = DistributedApplication.CreateBuilder(args);
+
+var postgres = builder.AddPostgres("postgres")
+    .WithDataVolume(isReadOnly: false)
+    .WithPgAdmin()
+    .WithLifetime(ContainerLifetime.Persistent);
+
+var hobbitDb = postgres.AddDatabase("hobbitdb");
+
+builder.AddProject<Projects.HobbitGame_Web>("webapp")
+    .WithReference(hobbitDb)
+    .WaitFor(hobbitDb)
+    .WithExternalHttpEndpoints();
+
+builder.Build().Run();
+\end{lstlisting}
+
+Each builder call in this file is load-bearing. Table~\ref{tab:builder-calls} documents the responsibility of every call, the failure mode produced by its omission, and the Aspire component that implements it.
+
+\begin{table}[H]
+\centering
+\caption{Builder calls in AppHost \texttt{Program.cs} and the consequences of omitting each.}
+\label{tab:builder-calls}
+\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{4.5cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{3.5cm}@{}}
+\toprule
+\textbf{Call} & \textbf{Effect} & \textbf{Omission failure mode} \\
+\midrule
+\texttt{AddPostgres("postgres")} & Pulls \texttt{postgres} Docker image; assigns resource name used as DNS alias & No Postgres container; web app cannot connect \\
+\addlinespace
+\texttt{.WithDataVolume()} & Creates/reuses named Docker volume & Database state lost on container stop \\
+\addlinespace
+\texttt{.WithPgAdmin()} & Pulls \texttt{dpage/pgadmin4}; auto-registers the server connection & No browser DB UI \\
+\addlinespace
+\texttt{.WithLifetime(Persistent)} & Container survives AppHost exit; reused on next \texttt{dotnet run} & Fresh empty DB on every developer session \\
+\addlinespace
+\texttt{.AddDatabase("hobbitdb")} & Registers logical DB; name must match \texttt{AddNpgsqlDbContext<>} argument & \texttt{ConnectionStrings\_\_hobbitdb} not injected; EF cannot resolve context \\
+\addlinespace
+\texttt{.WithReference(hobbitDb)} & Injects \texttt{ConnectionStrings\_\_hobbitdb} env var into web app & App starts without connection string; runtime exception on first DB call \\
+\addlinespace
+\texttt{.WaitFor(hobbitDb)} & Delays web app launch until Postgres health check passes & Race condition; app may start before DB is ready \\
+\addlinespace
+\texttt{.WithExternalHttpEndpoints()} & Binds HTTP/HTTPS on \texttt{localhost} outside Aspire reverse proxy & Web app only reachable through Aspire dashboard proxy \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{The Postgres Resource Name and DNS Aliasing}
+
+The string argument to \texttt{AddPostgres} --- \texttt{"postgres"} in the example --- becomes the DNS alias under which the container is reachable from other resources within the Aspire-managed network. pgAdmin uses this alias as the host when auto-configuring its server connection. The alias is also the base for the \texttt{ConnectionStrings\_\_postgres} host entry injected into dependent projects. It should be kept lowercase and DNS-safe (letters, digits, hyphens).
+
+\subsection{The Database Resource Name and Connection String Injection}
+
+The string argument to \texttt{AddDatabase} --- \texttt{"hobbitdb"} --- determines the key under which the connection string is injected into the web project's environment. Aspire injects it as \texttt{ConnectionStrings\_\_hobbitdb} (using double underscore as the hierarchy separator, consistent with the .NET configuration system). The \texttt{Aspire.Npgsql.EntityFrameworkCore.PostgreSQL} package reads this key automatically when \texttt{AddNpgsqlDbContext\textless AppDbContext\textgreater("hobbitdb")} is called in the web project's \texttt{Program.cs}. The two strings must match exactly; a mismatch produces a runtime \texttt{InvalidOperationException} with a message indicating that no connection string named \texttt{"hobbitdb"} was found.
+
+\subsection{Persistent Containers and Developer Workflow}
+
+\texttt{ContainerLifetime.Persistent} changes the container lifecycle in two specific ways. First, the container is not stopped when the AppHost process exits (\texttt{Ctrl+C} or IDE stop). Second, on the next \texttt{dotnet run}, Aspire detects the existing container by name and attaches to it rather than creating a new one. This means that any data written in session $n$ --- EF migrations, seeded rows, saved game state --- is available in session $n+1$. The developer's workflow collapses to: run, work, stop, resume; no database re-seeding is required.
+
+The trade-off is that the container must be manually pruned when a clean state is desired. The command \texttt{docker rm -f postgres} (using the resource name) achieves this. Alternatively, removing the named volume with \texttt{docker volume rm} achieves the same effect at the data layer without removing the container.
+
+\subsection{WaitFor and EF Migration Ordering}
+
+\texttt{WaitFor(hobbitDb)} ensures the web application process does not start until the Postgres container passes its TCP health check. This eliminates the most common race condition. However, it does not wait for the \textit{logical} database to exist --- only for the Postgres process to be accepting connections. If the web application calls \texttt{dbContext.Database.EnsureCreatedAsync()} or \texttt{MigrateAsync()} at startup, those calls will execute after the container is ready, which is the correct ordering. No additional delay or retry logic is required in the web project.
