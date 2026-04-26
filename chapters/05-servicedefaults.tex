@@ -11,10 +11,10 @@ The ServiceDefaults library is a class library that is referenced by every proje
   \item \textbf{Service discovery} --- resolution of service names to endpoints via \texttt{Microsoft.Extensions.ServiceDiscovery}, enabling inter-service calls by name rather than hard-coded URLs.
 \end{enumerate}
 
-The \texttt{.csproj} for the HobbitGame ServiceDefaults project is:
+The \texttt{.csproj} for the Game ServiceDefaults project is:
 
 \begin{lstlisting}[language=XML]
-<!-- src/HobbitGame.ServiceDefaults/HobbitGame.ServiceDefaults.csproj -->
+<!-- src/Game.ServiceDefaults/Game.ServiceDefaults.csproj -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -40,7 +40,7 @@ The \texttt{.csproj} for the HobbitGame ServiceDefaults project is:
 The library exposes two extension methods on \texttt{IHostApplicationBuilder}: \texttt{AddServiceDefaults}, called once per orchestrated project, and \texttt{MapDefaultEndpoints}, called once the application is built to register health-check routes:
 
 \begin{lstlisting}[language={[Sharp]C}]
-// src/HobbitGame.ServiceDefaults/Extensions.cs
+// src/Game.ServiceDefaults/Extensions.cs
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;

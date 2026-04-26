@@ -54,7 +54,7 @@
 
 \begin{abstract}
 \noindent
-.NET Aspire 9 provides a composable orchestration layer that wires containerised infrastructure --- PostgreSQL, pgAdmin, Redis, and more --- into existing .NET solutions with a handful of builder calls and zero manual connection-string management. This article documents, in step-by-step and canonical-code form, how to add an Aspire AppHost project to any existing .NET~9 solution: declaring a PostgreSQL container with a persistent named Docker volume, attaching a pgAdmin~4 browser interface, enforcing \texttt{ContainerLifetime.Persistent} so containers survive successive \texttt{dotnet run} calls, wiring a logical database to the web project via \texttt{WithReference} and \texttt{WaitFor}, and publishing OpenTelemetry signals through a shared ServiceDefaults library. All generated secrets are stored in .NET User Secrets; no credentials reach source control. The worked example uses the HobbitGame solution --- a Blazor Server application backed by PostgreSQL --- to ground every instruction in a concrete, reproducible context.
+The worked example uses the Game solution --- a Blazor Server application backed by PostgreSQL --- to ground every instruction in a concrete, reproducible context.
 
 \vspace{0.5em}
 \noindent\textbf{Keywords:} .NET Aspire; PostgreSQL; pgAdmin; Docker; AppHost; ServiceDefaults; OpenTelemetry; Blazor; Entity Framework Core; container orchestration; developer experience.

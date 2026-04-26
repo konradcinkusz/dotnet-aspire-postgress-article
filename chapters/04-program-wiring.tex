@@ -3,10 +3,10 @@
 
 \subsection{Canonical Structure}
 
-The AppHost \texttt{Program.cs} consists of three logical blocks: (i) builder creation, (ii) resource declarations, and (iii) build-and-run. The complete canonical file for the HobbitGame scenario is:
+The complete canonical file for the Game scenario is:
 
 \begin{lstlisting}[language={[Sharp]C}]
-// src/HobbitGame.AppHost/Program.cs
+// src/Game.AppHost/Program.cs
 var builder = DistributedApplication.CreateBuilder(args);
 
 var postgres = builder.AddPostgres("postgres")
@@ -14,11 +14,11 @@ var postgres = builder.AddPostgres("postgres")
     .WithPgAdmin()
     .WithLifetime(ContainerLifetime.Persistent);
 
-var hobbitDb = postgres.AddDatabase("hobbitdb");
+var gameDb = postgres.AddDatabase("gamedb");
 
-builder.AddProject<Projects.HobbitGame_Web>("webapp")
-    .WithReference(hobbitDb)
-    .WaitFor(hobbitDb)
+builder.AddProject<Projects.Game_Web>("webapp")
+    .WithReference(gameDb)
+    .WaitFor(gameDb)
     .WithExternalHttpEndpoints();
 
 builder.Build().Run();
@@ -44,11 +44,11 @@ Each builder call in this file is load-bearing. Table~\ref{tab:builder-calls} do
 \addlinespace
 \texttt{.WithLifetime(Persistent)} & Container survives AppHost exit; reused on next \texttt{dotnet run} & Fresh empty DB on every developer session \\
 \addlinespace
-\texttt{.AddDatabase("hobbitdb")} & Registers logical DB; name must match \texttt{AddNpgsqlDbContext<>} argument & \texttt{ConnectionStrings\_\_hobbitdb} not injected; EF cannot resolve context \\
+\texttt{.AddDatabase("gamedb")} & Registers logical DB; name must match \texttt{AddNpgsqlDbContext<>} argument & \texttt{ConnectionStrings\_\_gamedb} not injected; EF cannot resolve context \\
 \addlinespace
-\texttt{.WithReference(hobbitDb)} & Injects \texttt{ConnectionStrings\_\_hobbitdb} env var into web app & App starts without connection string; runtime exception on first DB call \\
+\texttt{.WithReference(gameDb)} & Injects \texttt{ConnectionStrings\_\_gamedb} env var into web app & App starts without connection string; runtime exception on first DB call \\
 \addlinespace
-\texttt{.WaitFor(hobbitDb)} & Delays web app launch until Postgres health check passes & Race condition; app may start before DB is ready \\
+\texttt{.WaitFor(gameDb)} & Delays web app launch until Postgres health check passes & Race condition; app may start before DB is ready \\
 \addlinespace
 \texttt{.WithExternalHttpEndpoints()} & Binds HTTP/HTTPS on \texttt{localhost} outside Aspire reverse proxy & Web app only reachable through Aspire dashboard proxy \\
 \bottomrule
@@ -61,7 +61,7 @@ The string argument to \texttt{AddPostgres} --- \texttt{"postgres"} in the examp
 
 \subsection{The Database Resource Name and Connection String Injection}
 
-The string argument to \texttt{AddDatabase} --- \texttt{"hobbitdb"} --- determines the key under which the connection string is injected into the web project's environment. Aspire injects it as \texttt{ConnectionStrings\_\_hobbitdb} (using double underscore as the hierarchy separator, consistent with the .NET configuration system). The \texttt{Aspire.Npgsql.EntityFrameworkCore.PostgreSQL} package reads this key automatically when \texttt{AddNpgsqlDbContext\textless AppDbContext\textgreater("hobbitdb")} is called in the web project's \texttt{Program.cs}. The two strings must match exactly; a mismatch produces a runtime \texttt{InvalidOperationException} with a message indicating that no connection string named \texttt{"hobbitdb"} was found.
+The string argument to \texttt{AddDatabase} --- \texttt{"gamedb"} --- determines the key under which the connection string is injected into the web project's environment. Aspire injects it as \texttt{ConnectionStrings\_\_gamedb} (using double underscore as the hierarchy separator, consistent with the .NET configuration system). The \texttt{Aspire.Npgsql.EntityFrameworkCore.PostgreSQL} package reads this key automatically when \texttt{AddNpgsqlDbContext\textless AppDbContext\textgreater("gamedb")} is called in the web project's \texttt{Program.cs}. The two strings must match exactly; a mismatch produces a runtime \texttt{InvalidOperationException} with a message indicating that no connection string named \texttt{"gamedb"} was found.
 
 \subsection{Persistent Containers and Developer Workflow}
 
@@ -71,4 +71,4 @@ The trade-off is that the container must be manually pruned when a clean state i
 
 \subsection{WaitFor and EF Migration Ordering}
 
-\texttt{WaitFor(hobbitDb)} ensures the web application process does not start until the Postgres container passes its TCP health check. This eliminates the most common race condition. However, it does not wait for the \textit{logical} database to exist --- only for the Postgres process to be accepting connections. If the web application calls \texttt{dbContext.Database.EnsureCreatedAsync()} or \texttt{MigrateAsync()} at startup, those calls will execute after the container is ready, which is the correct ordering. No additional delay or retry logic is required in the web project.
+\texttt{WaitFor(gameDb)} ensures the web application process does not start until the Postgres container passes its TCP health check.

@@ -3,7 +3,7 @@
 [![CI](https://github.com/konradcinkusz/dotNET-Aspire-postgress-article/actions/workflows/ci.yml/badge.svg)](https://github.com/konradcinkusz/dotNET-Aspire-postgress-article/actions/workflows/ci.yml)
 [![PDF](https://img.shields.io/badge/PDF-download-blue)](https://github.com/konradcinkusz/dotNET-Aspire-postgress-article/releases/latest/download/Aspire_PostgreSQL_Setup.pdf)
 
-A practical technical article documenting every step required to add a .NET Aspire AppHost project to an existing .NET 9 solution, using the HobbitGame Blazor application as the worked example. The article covers PostgreSQL container setup with persistent named Docker volumes, pgAdmin 4 integration, ServiceDefaults for OpenTelemetry, and secure credential management via .NET User Secrets.
+A practical technical article documenting every step required to add a .NET Aspire AppHost project to an existing .NET 9 solution, using the Game Blazor application as the worked example.
 
 ## Quick start
 
@@ -79,14 +79,14 @@ I want you to add a .NET Aspire AppHost project that:
 10. All projects target .NET <NET_VERSION>.
 ```
 
-| Placeholder | HobbitGame value | Description |
+| Placeholder | Game value | Description |
 |-------------|-----------------|-------------|
 | `<NET_VERSION>` | `9` | Target framework major version |
-| `<PATH_TO_SLN>` | `HobbitGame.sln` | Relative path to solution file |
-| `<WEB_PROJECT_NAME>` | `HobbitGame.Web` | The project Aspire orchestrates |
-| `<PATH_TO_WEB_CSPROJ>` | `src/HobbitGame.Web/HobbitGame.Web.csproj` | Relative csproj path |
-| `<SOLUTION_PREFIX>` | `HobbitGame` | Common prefix for AppHost / ServiceDefaults names |
-| `<DB_RESOURCE_NAME>` | `hobbitdb` | Logical database name |
+| `<PATH_TO_SLN>` | `Game.sln` | Relative path to solution file |
+| `<WEB_PROJECT_NAME>` | `Game.Web` | The project Aspire orchestrates |
+| `<PATH_TO_WEB_CSPROJ>` | `src/Game.Web/Game.Web.csproj` | Relative csproj path |
+| `<SOLUTION_PREFIX>` | `Game` | Common prefix for AppHost / ServiceDefaults names |
+| `<DB_RESOURCE_NAME>` | `gamedb` | Logical database name |
 | `<ASPIRE_VERSION>` | `9.0.0` | NuGet version for all `Aspire.*` packages |
 
 ## Releasing

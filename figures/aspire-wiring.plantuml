@@ -33,17 +33,17 @@ skinparam note {
 
 title **Figure 1.** .NET Aspire AppHost resource wiring
 
-rectangle "**Aspire AppHost**\n(HobbitGame.AppHost)" as AppHost {
+rectangle "**Aspire AppHost**\n(Game.AppHost)" as AppHost {
 
   component "postgres\n(Docker container)\n+ named volume" as Postgres
   component "pgadmin\n(Docker container)" as PgAdmin
-  component "hobbitdb\n(logical database)" as HobbitDb
-  component "webapp\n(HobbitGame.Web)" as WebApp
+  component "gamedb\n(logical database)" as GameDb
+  component "webapp\n(Game.Web)" as WebApp
 
-  Postgres --> HobbitDb : AddDatabase("hobbitdb")
+  Postgres --> GameDb : AddDatabase("gamedb")
   Postgres --> PgAdmin  : WithPgAdmin() auto-configures server
-  HobbitDb --> WebApp   : WithReference(hobbitDb)\nConnectionStrings__hobbitdb injected
-  WebApp   ..> HobbitDb : WaitFor(hobbitDb)\ndelays startup until Postgres ready
+  GameDb --> WebApp   : WithReference(gameDb)\nConnectionStrings__gamedb injected
+  WebApp   ..> GameDb : WaitFor(gameDb)\ndelays startup until Postgres ready
 }
 
 note right of Postgres
