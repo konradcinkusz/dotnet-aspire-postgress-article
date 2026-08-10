@@ -1,15 +1,15 @@
 # Orchestrating PostgreSQL with .NET Aspire
 
-[![CI](https://github.com/konradcinkusz/dotNET-Aspire-postgress-article/actions/workflows/ci.yml/badge.svg)](https://github.com/konradcinkusz/dotNET-Aspire-postgress-article/actions/workflows/ci.yml)
-[![PDF](https://img.shields.io/badge/PDF-download-blue)](https://github.com/konradcinkusz/dotNET-Aspire-postgress-article/releases/latest/download/Aspire_PostgreSQL_Setup.pdf)
+[![CI](https://github.com/konradcinkusz/dotnet-aspire-postgress-article/actions/workflows/ci.yml/badge.svg)](https://github.com/konradcinkusz/dotnet-aspire-postgress-article/actions/workflows/ci.yml)
+[![PDF](https://img.shields.io/badge/PDF-download-blue)](https://github.com/konradcinkusz/dotnet-aspire-postgress-article/releases/latest/download/Aspire_PostgreSQL_Setup.pdf)
 
 A practical technical article documenting every step required to add a .NET Aspire AppHost project to an existing .NET 9 solution, using the Game Blazor application as the worked example.
 
 ## Quick start
 
 ```sh
-git clone https://github.com/konradcinkusz/dotNET-Aspire-postgress-article.git
-cd dotNET-Aspire-postgress-article
+git clone https://github.com/konradcinkusz/dotnet-aspire-postgress-article.git
+cd dotnet-aspire-postgress-article
 
 # Compile the PlantUML diagram once
 plantuml -tpng figures/aspire-wiring.plantuml
